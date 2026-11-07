@@ -10,7 +10,7 @@ function Message({ message }) {
   return message ? <p className={`form-message ${message.type}`} role="status">{message.text}</p> : null;
 }
 
-export default function ProjectBacklog({ project, membershipRevision, formatUser, onWorkloadChange }) {
+export default function ProjectBacklog({ project, projects, onProjectChange, membershipRevision, formatUser, onWorkloadChange }) {
   const [stories, setStories] = useState([]);
   const [members, setMembers] = useState([]);
   const [form, setForm] = useState(emptyStory);
@@ -107,7 +107,7 @@ export default function ProjectBacklog({ project, membershipRevision, formatUser
     event.preventDefault();
     setMessage(null);
     if (!form.title.trim() || !form.description.trim()) {
-      setMessage({ type: "error", text: "Add a title and a description first." });
+      setMessage({ type: "error", text: "Give your story a title and a few details, then try again." });
       return;
     }
     setBusy(true);
@@ -128,7 +128,7 @@ export default function ProjectBacklog({ project, membershipRevision, formatUser
   }
 
   async function deleteStory(story) {
-    if (!window.confirm(`Delete "${story.title}"? This permanently removes the story.`)) return;
+    if (!window.confirm(`Delete "${story.title}"? You can't undo this.`)) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -160,12 +160,19 @@ export default function ProjectBacklog({ project, membershipRevision, formatUser
       <div className="panel-heading section-heading">
         <div>
           <h2 id="backlog-title">Project Backlog</h2>
-          <p>{project ? project.name : "Select a project to manage its user stories."}</p>
+          <p>{project ? project.name : "Pick a project and see what's on the list."}</p>
         </div>
         {project ? <button className="ghost-button compact-button" type="button" disabled={busy || loading}
           onClick={() => setRevision((current) => current + 1)}>Refresh Backlog</button> : null}
       </div>
-      {!project ? <p className="empty-text">No project selected. Choose or create a project above.</p> : (
+      <label className="backlog-project-picker">
+        <span>Backlog Project</span>
+        <select value={projectId || ""} onChange={(event) => onProjectChange(event.target.value)}>
+          <option value="">Choose a project</option>
+          {projects.map((project) => <option key={project._id} value={project._id}>{project.name}</option>)}
+        </select>
+      </label>
+      {!project ? <p className="empty-text">Pick a project above, or start one in Projects &amp; Memberships.</p> : (
         <>
           <Message message={loadError} />
           <Message message={message} />
@@ -190,17 +197,15 @@ export default function ProjectBacklog({ project, membershipRevision, formatUser
                   <input name="title" value={form.title} onChange={updateField} required />
                 </label>
                 <label><span>Story Description</span>
-                  <textarea name="description" rows="4" value={form.description} onChange={updateField} required
-                    placeholder="As a [type of user], I want [goal], so that [benefit]." aria-describedby="story-description-hint" />
+                  <textarea name="description" rows="4" value={form.description} onChange={updateField} required />
                 </label>
-                <p className="empty-text story-hint" id="story-description-hint">Use: As a [type of user], I want [goal], so that [benefit].</p>
                 <div className="form-row">
                   <label><span>Story Priority</span>
                     <select name="priority" value={form.priority} onChange={updateField} required>
                       {priorities.map((priority) => <option key={priority}>{priority}</option>)}
                     </select>
                   </label>
-                  <label><span>Assigned Member</span>
+                  <label><span>Assign to</span>
                     <select name="assigned_user_id" value={form.assigned_user_id} onChange={updateField}>
                       <option value="">Unassigned</option>
                       {members.map((member) => <option key={member._id} value={member._id}>{formatUser(member)}</option>)}
@@ -211,10 +216,10 @@ export default function ProjectBacklog({ project, membershipRevision, formatUser
                   <select name="status" value={form.status} onChange={updateField}>
                     {statuses.map((status) => <option key={status}>{status}</option>)}
                   </select>
-                </label> : <p className="empty-text story-hint">New stories start at To Do.</p>}
+                </label> : <p className="empty-text story-hint">We'll start this story in To Do. You can change that later.</p>}
                 <div className="story-actions">
-                  <button className="primary-button" type="submit">{busy ? "Saving..." : editingId ? "Save Story" : "Create Story"}</button>
-                  {editingId ? <button className="ghost-button" type="button" onClick={resetForm}>Cancel Edit</button> : null}
+                  <button className="primary-button" type="submit">{busy ? "Saving..." : editingId ? "Save Changes" : "Create Story"}</button>
+                  {editingId ? <button className="ghost-button" type="button" onClick={resetForm}>Cancel</button> : null}
                 </div>
               </fieldset>
             </form>
@@ -225,21 +230,21 @@ export default function ProjectBacklog({ project, membershipRevision, formatUser
                   <input type="search" name="search" value={filters.search} onChange={updateFilter} placeholder="Search by title" />
                 </label>
                 <div className="story-filter-row">
-                  <label><span>Filter priority</span>
+                  <label><span>Priority</span>
                     <select name="priority" value={filters.priority} onChange={updateFilter}>
                       <option value="">All priorities</option>
                       {priorities.map((priority) => <option key={priority}>{priority}</option>)}
                     </select>
                   </label>
-                  <label><span>Filter status</span>
+                  <label><span>Status</span>
                     <select name="status" value={filters.status} onChange={updateFilter}>
                       <option value="">All statuses</option>
                       {statuses.map((status) => <option key={status}>{status}</option>)}
                     </select>
                   </label>
-                  <label><span>Filter assignee</span>
+                  <label><span>Assigned to</span>
                     <select name="assignee" value={filters.assignee} onChange={updateFilter}>
-                      <option value="">All assignees</option>
+                      <option value="">Anyone</option>
                       <option value="unassigned">Unassigned</option>
                       {members.map((member) => <option key={member._id} value={member._id}>{formatUser(member)}</option>)}
                     </select>
@@ -252,10 +257,10 @@ export default function ProjectBacklog({ project, membershipRevision, formatUser
                 </div> : null}
               </fieldset>
               <div className="story-list" aria-label="Saved stories" aria-busy={loading}>
-                {loading ? <p className="empty-text" role="status">Loading backlog and members...</p> : null}
-                {!loading && !loadError && stories.length === 0 ? <p className="empty-text">No stories in this project yet. Create the first one.</p> : null}
+                {loading ? <p className="empty-text" role="status">Getting your stories and team...</p> : null}
+                {!loading && !loadError && stories.length === 0 ? <p className="empty-text">No stories yet. Add one to get things going.</p> : null}
                 {!loading && !loadError && stories.length > 0 && visibleStories.length === 0
-                  ? <p className="empty-text">No stories match these filters. Clear filters to show all stories.</p> : null}
+                  ? <p className="empty-text">Nothing matches just yet. Try another search or clear the filters.</p> : null}
                 {!loading && !loadError ? visibleStories.map((story) => (
                   <article className={story._id === editingId ? "story-card is-editing" : "story-card"} key={story._id}
                     aria-label={story.title}>
@@ -265,7 +270,7 @@ export default function ProjectBacklog({ project, membershipRevision, formatUser
                     <p className="story-description">{story.description}</p>
                     <dl className="story-meta">
                       <div><dt>Status</dt><dd>{story.status}</dd></div>
-                      <div><dt>Assigned Member</dt><dd>{story.assigned_user ? formatUser(story.assigned_user) : "Unassigned"}</dd></div>
+                      <div><dt>Assigned to</dt><dd>{story.assigned_user ? formatUser(story.assigned_user) : "Unassigned"}</dd></div>
                     </dl>
                     <div className="story-actions">
                       <button className="ghost-button compact-button" type="button" disabled={disabled} onClick={() => editStory(story)}>Edit</button>

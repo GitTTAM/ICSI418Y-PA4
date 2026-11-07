@@ -14,39 +14,39 @@ function asyncRoute(handler) {
 
 router.param("projectId", asyncRoute(async (request, response, next) => {
   if (!isIdentifier(request.params.projectId)) {
-    return response.status(400).json({ message: "Invalid project identifier." });
+    return response.status(400).json({ message: "That project ID doesn't look right. Choose the project again." });
   }
   if (!await Project.exists({ _id: request.params.projectId })) {
-    return response.status(404).json({ message: "That project does not exist." });
+    return response.status(404).json({ message: "We couldn't find that project. Try refreshing your projects." });
   }
   next();
 }));
 
 router.param("storyId", (request, response, next) => {
   if (!isIdentifier(request.params.storyId)) {
-    return response.status(400).json({ message: "Invalid story identifier." });
+    return response.status(400).json({ message: "That story ID doesn't look right. Refresh the backlog and try again." });
   }
   next();
 });
 
 function validateFields(body, editing) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
-    return "Send a story object.";
+    return "We couldn't read the story details. Try again.";
   }
   if ([body.title, body.description].some((value) => typeof value !== "string" || !value.trim())) {
-    return "Title and description must be nonblank text.";
+    return "Give your story a title and a few details, then try again.";
   }
   if (!STORY_PRIORITIES.includes(body.priority)) {
-    return "Choose High, Medium, or Low priority.";
+    return "Pick a priority: High, Medium, or Low.";
   }
   if (editing && !STORY_STATUSES.includes(body.status)) {
-    return "Choose To Do, In Progress, or Done status.";
+    return "Pick a status: To Do, In Progress, or Done.";
   }
   if (editing && body.assigned_user_id === undefined) {
-    return "Choose a project member or Unassigned.";
+    return "Pick someone from the team, or leave the story unassigned.";
   }
   if (body.assigned_user_id != null && !isIdentifier(body.assigned_user_id)) {
-    return "Invalid assigned member identifier. Use null for Unassigned.";
+    return "Pick someone from the team, or leave the story unassigned.";
   }
   return null;
 }
@@ -54,10 +54,10 @@ function validateFields(body, editing) {
 async function validateAssignment(projectId, userId) {
   if (userId == null) return null;
   if (!await User.exists({ _id: userId })) {
-    return { status: 404, message: "That assigned user does not exist." };
+    return { status: 404, message: "We couldn't find that person. Try refreshing the backlog." };
   }
   if (!await ProjectMembership.exists({ project_id: projectId, user_id: userId })) {
-    return { status: 400, message: "The assigned user must be a current member of this project." };
+    return { status: 400, message: "Add this person to the team before assigning them a story." };
   }
   return null;
 }
@@ -107,13 +107,13 @@ router.post(basePath, asyncRoute(async (request, response) => {
     status: "To Do"
   });
   await story.populate("assigned_user_id", "f_name l_name username");
-  response.status(201).json({ message: "Story created. Status starts at To Do.", story: formatStory(story) });
+  response.status(201).json({ message: "Story added! It's in To Do for now.", story: formatStory(story) });
 }));
 
 router.put(`${basePath}/:storyId`, asyncRoute(async (request, response) => {
   const query = storyQuery(request);
   if (!await UserStory.exists(query)) {
-    return response.status(404).json({ message: "That story does not exist in this project." });
+    return response.status(404).json({ message: "We couldn't find that story here. Try refreshing the backlog." });
   }
   const error = validateFields(request.body, true);
   if (error) return response.status(400).json({ message: error });
@@ -123,16 +123,16 @@ router.put(`${basePath}/:storyId`, asyncRoute(async (request, response) => {
   const story = await populateAssignee(UserStory.findOneAndUpdate(query, {
     $set: { ...editableFields(request.body), status: request.body.status }
   }, { new: true, runValidators: true }));
-  if (!story) return response.status(404).json({ message: "That story does not exist in this project." });
-  response.json({ message: "Story saved.", story: formatStory(story) });
+  if (!story) return response.status(404).json({ message: "We couldn't find that story here. Try refreshing the backlog." });
+  response.json({ message: "Your changes are saved.", story: formatStory(story) });
 }));
 
 router.delete(`${basePath}/:storyId`, asyncRoute(async (request, response) => {
   const result = await UserStory.deleteOne(storyQuery(request));
   if (!result.deletedCount) {
-    return response.status(404).json({ message: "That story does not exist in this project." });
+    return response.status(404).json({ message: "We couldn't find that story here. Try refreshing the backlog." });
   }
-  response.json({ message: "Story deleted." });
+  response.json({ message: "Story removed from the backlog." });
 }));
 
 export default router;

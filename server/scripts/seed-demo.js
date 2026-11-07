@@ -7,7 +7,7 @@ dotenv.config();
 try {
   await connectDatabase();
   const { users, projects } = await seedDemoData();
-  console.log("PA4 demo data ready. Existing records were preserved.");
+  console.log(`Ram Ranch demo ready: ${users.length} character accounts and ${projects.length} projects. Existing accounts and custom stories were kept.`);
   console.log("Demo users:", users.map((user) => user.username).join(", "));
   console.log("Password for newly created demo users:", DEMO_PASSWORD);
   console.log("Projects:", projects.map((project) => project.name).join(", "));

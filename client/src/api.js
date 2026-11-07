@@ -7,7 +7,7 @@ export async function apiRequest(path, options = {}) {
     body: options.body ? JSON.stringify(options.body) : undefined,
     signal: options.signal
   });
-  const data = await response.json().catch(() => ({ message: "The server sent back an unreadable response." }));
-  if (!response.ok) throw new Error(data.message || "Could not complete the request.");
+  const data = await response.json().catch(() => ({ message: "We couldn't read the server's reply. Try again." }));
+  if (!response.ok) throw new Error(data.message || "That didn't go through. Try again.");
   return data;
 }

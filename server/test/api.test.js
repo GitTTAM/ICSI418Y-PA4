@@ -5,13 +5,14 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import { createApp } from "../src/app.js";
 import UserStory from "../src/models/UserStory.js";
 import ProjectMembership from "../src/models/ProjectMembership.js";
-import { seedDemoData } from "../src/demoData.js";
+import User from "../src/models/User.js";
+import { seedDemoData, DEMO_PASSWORD } from "../src/demoData.js";
 
 let database, server, baseUrl, users, projects;
 const missingId = "000000000000000000000001";
 const storyFields = {
-  title: "View event details",
-  description: "As a student, I want to view event details, so that I can decide whether to attend.",
+  title: "Find 18 cowboys for the showers",
+  description: "As a ranch coordinator, I want to find 18 cowboys for the showers, so that the shower roster is complete.",
   priority: "High",
   assigned_user_id: null
 };
@@ -75,10 +76,10 @@ test("PA3 signup, login, lead membership, and duplicate protections still work",
 
 test("creation trims text, forces To Do, and stores ObjectId relationships in UserStories", async () => {
   const story = await createStory({
-    title: "  View event details  ", assigned_user_id: users[1]._id,
+    title: "  Find 18 cowboys for the showers  ", assigned_user_id: users[1]._id,
     status: "Done", project_id: projects[1]._id, _id: missingId
   });
-  assert.equal(story.title, "View event details");
+  assert.equal(story.title, "Find 18 cowboys for the showers");
   assert.equal(story.status, "To Do");
   assert.equal(story.project_id, projects[0]._id);
   assert.notEqual(story._id, missingId);
@@ -163,7 +164,7 @@ test("assigned stories block member removal in all statuses until unassigned or 
   for (const status of ["To Do", "In Progress", "Done"]) {
     await api("PUT", `${backlogPath()}/${story._id}`, { ...storyFields, status, assigned_user_id: users[1]._id });
     const result = await api("DELETE", memberPath(0, 1), undefined, 409);
-    assert.match(result.message, /Reassign, unassign, or delete/);
+    assert.match(result.message, /They still have stories here\./);
     assert(await ProjectMembership.exists({ project_id: projects[0]._id, user_id: users[1]._id }));
   }
   await api("PUT", `${backlogPath()}/${story._id}`, { ...storyFields, status: "Done" });
@@ -194,13 +195,66 @@ test("saved changes and deletions survive a new database connection", async () =
   assert.deepEqual((await api("GET", backlogPath())).stories, []);
 });
 
-test("demo data supplies three users, two projects, and five stories without duplicating on rerun", async () => {
+test("ranch migration keeps project/story IDs, custom work, passwords, and edited story fields", async () => {
+  const oldUsers = [];
+  for (const username of ["pa4_alex", "pa4_blair", "pa4_casey"]) {
+    oldUsers.push((await api("POST", "/signup", { f_name: username, l_name: "Original", username, password: "original-password" }, 201)).user);
+  }
+  const oldProjects = [];
+  for (const [name, index] of [["PA4 Campus Events", 0], ["PA4 Study Groups", 2]]) {
+    oldProjects.push((await api("POST", "/projects", { name, description: "Original seeded project", status: "Active", project_lead_id: oldUsers[index]._id }, 201)).project);
+  }
+  const path = `/projects/${oldProjects[0]._id}/stories`;
+  await api("POST", `/projects/${oldProjects[0]._id}/memberships`, { user_id: oldUsers[1]._id }, 201);
+  await api("POST", `/projects/${oldProjects[0]._id}/memberships`, { user_id: oldUsers[2]._id }, 201);
+  const oldFields = {
+    title: "View campus event details",
+    description: "As a student, I want to view details of a campus event, so that I can decide whether to attend.",
+    priority: "High", assigned_user_id: oldUsers[0]._id
+  };
+  const oldStory = (await api("POST", path, oldFields, 201)).story;
+  await api("PUT", `${path}/${oldStory._id}`, { ...oldFields, priority: "Low", status: "Done" });
+  const custom = (await api("POST", path, { ...storyFields, title: "Filter upcoming events", description: "My own edited description", assigned_user_id: oldUsers[1]._id }, 201)).story;
+  const reassigned = (await api("POST", path, {
+    ...storyFields, title: "Save a favorite event",
+    description: "As a student, I want to save an event, so that I can find it again later.",
+    assigned_user_id: oldUsers[2]._id
+  }, 201)).story;
   const demo = await seedDemoData();
+  assert.equal(String(demo.projects[0]._id), oldProjects[0]._id);
+  assert.equal(String(demo.projects[1]._id), oldProjects[1]._id);
+  assert.equal(demo.projects[0].name, "Ram Ranch Showers");
+  const migrated = await UserStory.findById(oldStory._id);
+  assert.equal(migrated.title, "Find 18 cowboys for the showers");
+  assert.equal(migrated.status, "Done");
+  assert.equal(migrated.priority, "Low");
+  assert.equal(String(migrated.assigned_user_id), String(demo.users[0]._id));
+  assert.equal((await UserStory.findById(custom._id)).description, "My own edited description");
+  assert.equal(String((await UserStory.findById(reassigned._id)).assigned_user_id), oldUsers[2]._id);
+  assert(await ProjectMembership.exists({ project_id: oldProjects[0]._id, user_id: demo.users[0]._id }));
+  assert(await ProjectMembership.exists({ project_id: oldProjects[0]._id, user_id: oldUsers[2]._id }));
+  await api("POST", "/login", { username: "pa4_alex", password: "original-password" });
+  const storyCount = await UserStory.countDocuments();
+  await seedDemoData();
+  assert.equal(await UserStory.countDocuments(), storyCount);
+  assert.equal((await UserStory.findById(oldStory._id)).priority, "Low");
+});
+
+test("demo data supplies 18 character users, two ranch projects, and five stories without duplicating on rerun", async () => {
+  const demo = await seedDemoData();
+  const userCount = await User.countDocuments();
   await seedDemoData();
   const stories = await UserStory.find({ project_id: { $in: demo.projects.map((project) => project._id) } });
-  assert.equal(demo.users.length, 3);
+  assert.equal(demo.users.length, 18);
+  assert.equal(new Set(demo.users.map((user) => `${user.f_name} ${user.l_name}`)).size, 18);
+  assert.equal(new Set(demo.users.map((user) => user.username)).size, 18);
+  assert.equal(await User.countDocuments(), userCount);
+  assert.equal(demo.users[0].f_name, "Foghorn");
+  await api("POST", "/login", { username: "pa4_foghorn_leghorn", password: DEMO_PASSWORD });
   assert.equal(demo.projects.length, 2);
   assert.equal(stories.length, 5);
+  assert(stories.some((story) => story.title === "Find 18 cowboys for the showers"));
+  assert(stories.some((story) => story.title === "Recruit a shower cleanup crew"));
   assert.equal(new Set(stories.map((story) => story.priority)).size, 3);
   assert.equal(new Set(stories.map((story) => story.status)).size, 3);
   assert(stories.some((story) => story.assigned_user_id === null));

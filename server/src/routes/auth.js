@@ -13,7 +13,7 @@ router.post("/signup", async (request, response) => {
 
   if ([f_name, l_name, username, password].some(isBlank)) {
     return response.status(400).json({
-      message: "Fill out all signup fields first."
+      message: "Add your name, username, and password to get started."
     });
   }
 
@@ -24,7 +24,7 @@ router.post("/signup", async (request, response) => {
 
     if (existingUser) {
       return response.status(409).json({
-        message: "That username is taken."
+        message: "That username's taken. Try another one."
       });
     }
 
@@ -37,7 +37,7 @@ router.post("/signup", async (request, response) => {
     });
 
     return response.status(201).json({
-      message: `Account ready for ${user.username}.`,
+      message: `You're all set, ${user.f_name}! You can log in now.`,
       user: {
         _id: user._id,
         f_name: user.f_name,
@@ -48,13 +48,13 @@ router.post("/signup", async (request, response) => {
   } catch (error) {
     if (error.code === 11000) {
       return response.status(409).json({
-        message: "That username is taken."
+        message: "That username's taken. Try another one."
       });
     }
 
     console.error("Signup error:", error);
     return response.status(500).json({
-      message: "Signup hit a snag. Try again."
+      message: "Couldn't create your account right now. Try again."
     });
   }
 });
@@ -64,7 +64,7 @@ router.post("/login", async (request, response) => {
 
   if ([username, password].some(isBlank)) {
     return response.status(400).json({
-      message: "Add both username and password first."
+      message: "Enter your username and password to log in."
     });
   }
 
@@ -75,7 +75,7 @@ router.post("/login", async (request, response) => {
 
     if (!user) {
       return response.status(404).json({
-        message: "That username is not in the team yet."
+        message: "We couldn't find that username. Try again or create an account."
       });
     }
 
@@ -83,12 +83,12 @@ router.post("/login", async (request, response) => {
 
     if (!passwordMatches) {
       return response.status(401).json({
-        message: "That password did not match."
+        message: "That password didn't match. Give it another try."
       });
     }
 
     return response.json({
-      message: `You are in. Welcome, ${user.f_name}!`,
+      message: `Welcome back, ${user.f_name}!`,
       user: {
         _id: user._id,
         f_name: user.f_name,
@@ -99,7 +99,7 @@ router.post("/login", async (request, response) => {
   } catch (error) {
     console.error("Login error:", error);
     return response.status(500).json({
-      message: "Login hit a snag. Try again."
+      message: "Couldn't log you in right now. Try again."
     });
   }
 });

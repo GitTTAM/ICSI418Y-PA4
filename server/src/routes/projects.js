@@ -131,19 +131,19 @@ router.post("/projects", async (request, response) => {
 
   if ([name, description, status, project_lead_id].some(isBlank)) {
     return response.status(400).json({
-      message: "Fill out the project fields first."
+      message: "Add the missing project details, then try again."
     });
   }
 
   if (!PROJECT_STATUSES.includes(status)) {
     return response.status(400).json({
-      message: "Pick one of the project statuses."
+      message: "Pick a status: Planning, Active, or Completed."
     });
   }
 
   if (!isValidObjectId(project_lead_id)) {
     return response.status(404).json({
-      message: "That project lead is not in users."
+      message: "We couldn't find that person. Choose someone else to lead."
     });
   }
 
@@ -152,7 +152,7 @@ router.post("/projects", async (request, response) => {
 
     if (!lead) {
       return response.status(404).json({
-        message: "That project lead is not in users."
+        message: "We couldn't find that person. Choose someone else to lead."
       });
     }
 
@@ -171,7 +171,7 @@ router.post("/projects", async (request, response) => {
     const savedProject = await findProject(project._id);
 
     return response.status(201).json({
-      message: "Project saved. The lead is on the team.",
+      message: "Project ready! Your lead is on the team too.",
       project: formatProject(savedProject)
     });
   } catch (error) {
@@ -188,7 +188,7 @@ router.get("/projects/:projectId/memberships", async (request, response) => {
 
     if (!project) {
       return response.status(404).json({
-        message: "That project is not there anymore."
+        message: "We couldn't find that project. Try refreshing your projects."
       });
     }
 
@@ -211,13 +211,13 @@ router.post("/projects/:projectId/memberships", async (request, response) => {
 
   if (isBlank(user_id)) {
     return response.status(400).json({
-      message: "Pick a user first."
+      message: "Choose someone to add to the team."
     });
   }
 
   if (!isValidObjectId(user_id)) {
     return response.status(404).json({
-      message: "That user is not there anymore."
+      message: "We couldn't find that person. Try refreshing your projects."
     });
   }
 
@@ -226,7 +226,7 @@ router.post("/projects/:projectId/memberships", async (request, response) => {
 
     if (!project) {
       return response.status(404).json({
-        message: "That project is not there anymore."
+        message: "We couldn't find that project. Try refreshing your projects."
       });
     }
 
@@ -234,7 +234,7 @@ router.post("/projects/:projectId/memberships", async (request, response) => {
 
     if (!user) {
       return response.status(404).json({
-        message: "That user is not there anymore."
+        message: "We couldn't find that person. Try refreshing your projects."
       });
     }
 
@@ -245,7 +245,7 @@ router.post("/projects/:projectId/memberships", async (request, response) => {
 
     if (existingMembership) {
       return response.status(409).json({
-        message: "That person is already on this project."
+        message: "They're already on the team."
       });
     }
 
@@ -255,13 +255,13 @@ router.post("/projects/:projectId/memberships", async (request, response) => {
     });
 
     return response.status(201).json({
-      message: "Added to the project.",
+      message: "They're on the team!",
       memberships: await getProjectMemberships(project._id)
     });
   } catch (error) {
     if (error.code === 11000) {
       return response.status(409).json({
-        message: "That person is already on this project."
+        message: "They're already on the team."
       });
     }
 
@@ -277,7 +277,7 @@ router.delete("/projects/:projectId/memberships/:userId", async (request, respon
 
   if (!isValidObjectId(userId)) {
     return response.status(404).json({
-      message: "That user is not there anymore."
+      message: "We couldn't find that person. Try refreshing your projects."
     });
   }
 
@@ -286,7 +286,7 @@ router.delete("/projects/:projectId/memberships/:userId", async (request, respon
 
     if (!project) {
       return response.status(404).json({
-        message: "That project is not there anymore."
+        message: "We couldn't find that project. Try refreshing your projects."
       });
     }
 
@@ -294,13 +294,13 @@ router.delete("/projects/:projectId/memberships/:userId", async (request, respon
 
     if (!user) {
       return response.status(404).json({
-        message: "That user is not there anymore."
+        message: "We couldn't find that person. Try refreshing your projects."
       });
     }
 
     if (idsMatch(getLeadId(project), user._id)) {
       return response.status(400).json({
-        message: "The lead has to stay on the project."
+        message: "The project lead stays on the team."
       });
     }
 
@@ -311,7 +311,7 @@ router.delete("/projects/:projectId/memberships/:userId", async (request, respon
 
     if (assignedStory) {
       return response.status(409).json({
-        message: "Reassign, unassign, or delete this member's stories before removing them from the project. Done stories count too."
+        message: "They still have stories here. Give those to someone else, leave them unassigned, or delete them before removing this person. Done stories count too."
       });
     }
 
@@ -322,12 +322,12 @@ router.delete("/projects/:projectId/memberships/:userId", async (request, respon
 
     if (!removedMembership) {
       return response.status(404).json({
-        message: "That person is not on this project."
+        message: "They're not on this team. Try refreshing your projects."
       });
     }
 
     return response.json({
-      message: "Removed from the project.",
+      message: "They're off the team now.",
       memberships: await getProjectMemberships(project._id)
     });
   } catch (error) {

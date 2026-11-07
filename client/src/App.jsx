@@ -4,6 +4,10 @@ import ProjectBacklog from "./ProjectBacklog.jsx";
 import "./App.css";
 
 const STATUS_OPTIONS = ["Planning", "Active", "Completed"];
+const WORKSPACE_TABS = [
+  { id: "projects", label: "Projects & Memberships" },
+  { id: "backlog", label: "Project Backlog" }
+];
 
 const emptySignup = {
   f_name: "",
@@ -59,6 +63,7 @@ function formatUser(user) {
 
 function App() {
   const [activeForm, setActiveForm] = useState("signup");
+  const [workspaceTab, setWorkspaceTab] = useState("projects");
   const [signupForm, setSignupForm] = useState(emptySignup);
   const [loginForm, setLoginForm] = useState(emptyLogin);
   const [projectForm, setProjectForm] = useState(emptyProject);
@@ -134,6 +139,7 @@ function App() {
   }, [loggedInUser, selectedProjectId, visibleProjects]);
 
   function clearProjectWorkspace() {
+    setWorkspaceTab("projects");
     setProjectForm(emptyProject);
     setProjectMessage(null);
     setMembershipMessage(null);
@@ -231,7 +237,7 @@ function App() {
     if (hasEmptyField(signupForm)) {
       setSignupMessage({
         type: "error",
-        text: "Fill out the signup fields first."
+        text: "Add your name, username, and password to get started."
       });
       return;
     }
@@ -269,7 +275,7 @@ function App() {
     if (hasEmptyField(loginForm)) {
       setLoginMessage({
         type: "error",
-        text: "Add both username and password first."
+        text: "Enter your username and password to log in."
       });
       return;
     }
@@ -286,6 +292,7 @@ function App() {
         text: data.message
       });
       setLoggedInUser(data.user);
+      setWorkspaceTab("projects");
       setLoginForm(emptyLogin);
       await loadWorkspaceData();
     } catch (error) {
@@ -302,10 +309,25 @@ function App() {
     setLoggedInUser(null);
     setLoginMessage({
       type: "success",
-      text: "You are logged out. The project tools are tucked away."
+      text: "You're logged out. See you next time."
     });
     setActiveForm("login");
     clearProjectWorkspace();
+  }
+
+  function navigateWorkspaceTabs(event) {
+    const index = WORKSPACE_TABS.findIndex((tab) => tab.id === workspaceTab);
+    const nextIndex = {
+      ArrowRight: (index + 1) % WORKSPACE_TABS.length,
+      ArrowLeft: (index + WORKSPACE_TABS.length - 1) % WORKSPACE_TABS.length,
+      Home: 0,
+      End: WORKSPACE_TABS.length - 1
+    }[event.key];
+    if (nextIndex === undefined) return;
+    event.preventDefault();
+    const nextTab = WORKSPACE_TABS[nextIndex].id;
+    setWorkspaceTab(nextTab);
+    document.getElementById(`workspace-${nextTab}-tab`).focus();
   }
 
   async function submitProject(event) {
@@ -315,7 +337,7 @@ function App() {
     if (!loggedInUser) {
       setProjectMessage({
         type: "error",
-        text: "Log in before making projects."
+        text: "Log in to create a project."
       });
       return;
     }
@@ -323,7 +345,7 @@ function App() {
     if (hasEmptyField(projectForm)) {
       setProjectMessage({
         type: "error",
-        text: "Give the project its missing info first."
+        text: "Add the missing project details, then try again."
       });
       return;
     }
@@ -358,7 +380,7 @@ function App() {
     if (!loggedInUser) {
       setMembershipMessage({
         type: "error",
-        text: "Log in before changing the team list."
+        text: "Log in to update the team."
       });
       return;
     }
@@ -366,7 +388,7 @@ function App() {
     if (!selectedProjectId) {
       setMembershipMessage({
         type: "error",
-        text: "Pick a project first."
+        text: "Choose a project to add someone."
       });
       return;
     }
@@ -374,7 +396,7 @@ function App() {
     if (!memberUserId) {
       setMembershipMessage({
         type: "error",
-        text: "Pick a user first."
+        text: "Choose someone to add to the team."
       });
       return;
     }
@@ -436,30 +458,34 @@ function App() {
   }
 
   return (
-    <main className={loggedInUser ? "app-shell has-fresh-start" : "app-shell"}>
-      <header className="app-header">
-        <p className="course-label">ICSI 418Y PA4</p>
-        <h1>Projects and Backlogs</h1>
+    <main className="app-shell">
+      <header className={loggedInUser ? "app-header is-signed-in" : "app-header"}>
+        {loggedInUser ? (
+          <section className="panel account-summary" aria-labelledby="account-title">
+            <p className="course-label">ICSI 418Y PA4</p>
+            <div className="account-row">
+              <div className="account-details">
+                <h2 id="account-title">Signed In</h2>
+                <p>Signed in as {formatUser(loggedInUser)}</p>
+              </div>
+              <button className="ghost-button compact-button" type="button" onClick={logout}>Log Out</button>
+            </div>
+          </section>
+        ) : null}
+        <div className="workspace-heading">
+          {!loggedInUser ? <p className="course-label">ICSI 418Y PA4</p> : null}
+          <h1>Projects and Backlogs</h1>
+        </div>
       </header>
 
-      <div className={loggedInUser ? "workspace-grid" : "workspace-grid is-auth-only"}>
+      <div className={loggedInUser ? "workspace" : "workspace-grid is-auth-only"}>
+        {!loggedInUser ? (
         <section className="panel auth-panel" aria-labelledby="auth-title">
           <div className="panel-heading">
-            <h2 id="auth-title">{loggedInUser ? "Signed In" : "Users"}</h2>
-            {!loggedInUser ? (
-              <p>Make or pick your user, then log in to get to the project board.</p>
-            ) : null}
+            <h2 id="auth-title">Welcome</h2>
+            <p>Create an account or log in to get started.</p>
           </div>
 
-          {loggedInUser ? (
-            <div className="login-state">
-              <strong>Logged in as {formatUser(loggedInUser)}</strong>
-              <button className="ghost-button compact-button" type="button" onClick={logout}>
-                Log Out
-              </button>
-            </div>
-          ) : (
-            <>
           <div className="tabs" role="tablist" aria-label="Authentication forms">
             <button
               className={activeForm === "signup" ? "tab is-active" : "tab"}
@@ -468,7 +494,7 @@ function App() {
               aria-selected={activeForm === "signup"}
               onClick={() => setActiveForm("signup")}
             >
-              Signup
+              Sign Up
             </button>
             <button
               className={activeForm === "login" ? "tab is-active" : "tab"}
@@ -477,7 +503,7 @@ function App() {
               aria-selected={activeForm === "login"}
               onClick={() => setActiveForm("login")}
             >
-              Login
+              Log In
             </button>
           </div>
 
@@ -572,16 +598,25 @@ function App() {
               ) : null}
             </form>
           )}
-            </>
-          )}
         </section>
+        ) : null}
 
         {loggedInUser ? (
           <>
+        <div className="workspace-tabs" role="tablist" aria-label="Workspace" onKeyDown={navigateWorkspaceTabs}>
+          {WORKSPACE_TABS.map((tab) => (
+            <button key={tab.id} id={`workspace-${tab.id}-tab`} className={workspaceTab === tab.id ? "tab is-active" : "tab"}
+              type="button" role="tab" aria-selected={workspaceTab === tab.id} aria-controls={`${tab.id}-tab-panel`}
+              tabIndex={workspaceTab === tab.id ? 0 : -1} onClick={() => setWorkspaceTab(tab.id)}>{tab.label}</button>
+          ))}
+        </div>
+        <div className="workspace-tab-panel" id="projects-tab-panel" role="tabpanel"
+          aria-labelledby="workspace-projects-tab" hidden={workspaceTab !== "projects"}>
+        <div className="project-membership-grid">
         <section className="panel project-panel" aria-labelledby="project-title">
           <div className="panel-heading">
             <h2 id="project-title">Create Project</h2>
-            <p>Give it a name, pick a status, and choose the lead.</p>
+            <p>Give it a name, add a few details, and pick who's leading.</p>
           </div>
 
           {dataMessage ? (
@@ -625,7 +660,7 @@ function App() {
                   value={projectForm.project_lead_id}
                   onChange={updateProjectField}
                 >
-                  <option value="">Select user</option>
+                  <option value="">Choose someone</option>
                   {users.map((user) => (
                     <option key={user._id} value={user._id}>
                       {formatUser(user)}
@@ -676,7 +711,7 @@ function App() {
 
             {!isDataLoading && visibleProjects.length === 0 ? (
               <p className="empty-text">
-                {projectView === "mine" ? "Nothing in your pile yet." : "No projects yet. Make the first one."}
+                {projectView === "mine" ? "You're not on any projects yet." : "No projects yet. Start one above."}
               </p>
             ) : null}
 
@@ -706,7 +741,7 @@ function App() {
         <section className="panel membership-panel" aria-labelledby="membership-title">
           <div className="panel-heading">
             <h2 id="membership-title">Memberships</h2>
-            <p>Pick a project, then tune its team list.</p>
+            <p>Who's on the team? Add people or make a few changes here.</p>
           </div>
 
           <label>
@@ -715,7 +750,7 @@ function App() {
               value={selectedProjectId}
               onChange={(event) => setSelectedProjectId(event.target.value)}
             >
-              <option value="">Select project</option>
+              <option value="">Choose a project</option>
               {visibleProjects.map((project) => (
                 <option key={project._id} value={project._id}>
                   {project.name}
@@ -736,9 +771,9 @@ function App() {
 
           <form className="member-form" onSubmit={addMember}>
             <label>
-              <span>Add Registered User</span>
+              <span>Add someone</span>
               <select value={memberUserId} onChange={(event) => setMemberUserId(event.target.value)}>
-                <option value="">Select user</option>
+                <option value="">Choose someone</option>
                 {users.map((user) => {
                   const isAlreadyMember = selectedMemberIds.has(user._id);
 
@@ -757,7 +792,7 @@ function App() {
               type="submit"
               disabled={isMemberLoading || !selectedProjectId || users.length === 0}
             >
-              {isMemberLoading ? "Updating..." : "Add Member"}
+              {isMemberLoading ? "Updating..." : "Add to Team"}
             </button>
           </form>
 
@@ -767,7 +802,7 @@ function App() {
             </p>
           ) : null}
 
-          {selectedProject ? <p className="empty-text workload-note">Assigned counts include Done stories.</p> : null}
+          {selectedProject ? <p className="empty-text workload-note">Done stories count toward each person's total too.</p> : null}
           <div className="member-list">
             {selectedProjectId && memberships.length === 0 ? (
               <p className="empty-text">No members here yet.</p>
@@ -785,10 +820,10 @@ function App() {
                     <strong>{formatUser(user)}</strong>
                     <span>{isLead ? "Project Lead" : "Member"}</span>
                     <span className="member-workload">{assignedCount === null
-                      ? workload?.status === "error" ? "Assigned stories unavailable" : "Loading assigned stories..."
+                      ? workload?.status === "error" ? "Couldn't load story counts. Try refreshing the backlog." : "Checking story counts..."
                       : `${assignedCount} assigned ${assignedCount === 1 ? "story" : "stories"}`}</span>
                     {!isLead && assignedCount > 0 ? <small className="member-removal-hint">
-                      Reassign, unassign, or delete these stories before removal.
+                      To remove this person, give their stories to someone else, leave them unassigned, or delete them.
                     </small> : null}
                   </div>
                   <button
@@ -801,15 +836,21 @@ function App() {
                       }
                     }}
                   >
-                    {isLead ? "Lead Locked" : "Remove"}
+                    {isLead ? "Team Lead" : "Remove"}
                   </button>
                 </div>
               );
             })}
           </div>
         </section>
+        </div>
+        </div>
+        <div className="workspace-tab-panel" id="backlog-tab-panel" role="tabpanel"
+          aria-labelledby="workspace-backlog-tab" hidden={workspaceTab !== "backlog"}>
         <ProjectBacklog key={selectedProjectId || "no-project"} project={selectedProject}
+          projects={visibleProjects} onProjectChange={setSelectedProjectId}
           membershipRevision={membershipRevision} formatUser={formatUser} onWorkloadChange={setProjectWorkload} />
+        </div>
           </>
         ) : null}
       </div>
