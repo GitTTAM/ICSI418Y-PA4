@@ -2,12 +2,15 @@
   "name": "pa3-project-memberships",
   "version": "1.0.0",
   "private": true,
-  "description": "ICSI 418Y PA3 full-stack projects and project memberships app.",
+  "description": "ICSI 418Y PA4 projects, memberships, and user story backlogs.",
   "scripts": {
     "setup": "npm install --prefix server && npm install --prefix client",
     "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "server": "npm run dev --prefix server",
-    "client": "npm run dev --prefix client"
+    "client": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
+    "test": "npm test --prefix server && npm test --prefix client",
+    "seed": "npm run seed --prefix server"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

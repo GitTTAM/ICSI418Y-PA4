@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { apiRequest } from "./api.js";
+import ProjectBacklog from "./ProjectBacklog.jsx";
 import "./App.css";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5050/api";
 const STATUS_OPTIONS = ["Planning", "Active", "Completed"];
 
 const emptySignup = {
@@ -22,26 +23,6 @@ const emptyProject = {
   status: "Planning",
   project_lead_id: ""
 };
-
-async function apiRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: options.method || "GET",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
-
-  const data = await response.json().catch(() => ({
-    message: "The server sent back something I could not read."
-  }));
-
-  if (!response.ok) {
-    throw new Error(data.message || "Something went wrong.");
-  }
-
-  return data;
-}
 
 function hasEmptyField(values) {
   return Object.values(values).some((value) => value.trim() === "");
@@ -98,6 +79,10 @@ function App() {
   const [isProjectLoading, setIsProjectLoading] = useState(false);
   const [isMemberLoading, setIsMemberLoading] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(false);
+  const [membershipRevision, setMembershipRevision] = useState(0);
+  const [projectWorkload, setProjectWorkload] = useState(null);
+  const activeProjectId = useRef(selectedProjectId);
+  activeProjectId.current = selectedProjectId;
 
   const visibleProjects = useMemo(() => {
     if (projectView !== "mine" || !loggedInUser) {
@@ -123,11 +108,14 @@ function App() {
   );
 
   useEffect(() => {
+    const controller = new AbortController();
+    setMemberships([]);
+    setMemberUserId("");
+    setMembershipMessage(null);
     if (loggedInUser && selectedProjectId) {
-      loadMemberships(selectedProjectId);
-    } else {
-      setMemberships([]);
+      loadMemberships(selectedProjectId, controller.signal);
     }
+    return () => controller.abort();
   }, [loggedInUser, selectedProjectId]);
 
   useEffect(() => {
@@ -154,6 +142,7 @@ function App() {
     setProjects([]);
     setMemberships([]);
     setSelectedProjectId("");
+    setProjectWorkload(null);
     setMemberUserId("");
     setProjectView("all");
     setIsDataLoading(false);
@@ -194,13 +183,15 @@ function App() {
     }
   }
 
-  async function loadMemberships(projectId) {
+  async function loadMemberships(projectId, signal) {
     setMembershipMessage(null);
 
     try {
-      const data = await apiRequest(`/projects/${projectId}/memberships`);
+      const data = await apiRequest(`/projects/${projectId}/memberships`, { signal });
+      if (signal?.aborted || activeProjectId.current !== projectId) return;
       setMemberships(data.memberships || []);
     } catch (error) {
+      if (signal?.aborted || activeProjectId.current !== projectId) return;
       setMemberships([]);
       setMembershipMessage({
         type: "error",
@@ -350,7 +341,6 @@ function App() {
       });
       setProjectForm(emptyProject);
       await loadWorkspaceData(data.project._id);
-      await loadMemberships(data.project._id);
     } catch (error) {
       setProjectMessage({
         type: "error",
@@ -398,14 +388,17 @@ function App() {
           user_id: memberUserId
         }
       });
+      if (activeProjectId.current !== selectedProjectId) return;
       setMembershipMessage({
         type: "success",
         text: data.message
       });
       setMemberUserId("");
       setMemberships(data.memberships || []);
-      await loadWorkspaceData(selectedProjectId);
+      setMembershipRevision((current) => current + 1);
+      await loadWorkspaceData();
     } catch (error) {
+      if (activeProjectId.current !== selectedProjectId) return;
       setMembershipMessage({
         type: "error",
         text: error.message
@@ -423,13 +416,16 @@ function App() {
       const data = await apiRequest(`/projects/${selectedProjectId}/memberships/${userId}`, {
         method: "DELETE"
       });
+      if (activeProjectId.current !== selectedProjectId) return;
       setMembershipMessage({
         type: "success",
         text: data.message
       });
       setMemberships(data.memberships || []);
-      await loadWorkspaceData(selectedProjectId);
+      setMembershipRevision((current) => current + 1);
+      await loadWorkspaceData();
     } catch (error) {
+      if (activeProjectId.current !== selectedProjectId) return;
       setMembershipMessage({
         type: "error",
         text: error.message
@@ -442,8 +438,8 @@ function App() {
   return (
     <main className={loggedInUser ? "app-shell has-fresh-start" : "app-shell"}>
       <header className="app-header">
-        <p className="course-label">ICSI 418Y PA3</p>
-        <h1>Projects and Memberships</h1>
+        <p className="course-label">ICSI 418Y PA4</p>
+        <h1>Projects and Backlogs</h1>
       </header>
 
       <div className={loggedInUser ? "workspace-grid" : "workspace-grid is-auth-only"}>
@@ -771,6 +767,7 @@ function App() {
             </p>
           ) : null}
 
+          {selectedProject ? <p className="empty-text workload-note">Assigned counts include Done stories.</p> : null}
           <div className="member-list">
             {selectedProjectId && memberships.length === 0 ? (
               <p className="empty-text">No members here yet.</p>
@@ -779,12 +776,20 @@ function App() {
             {memberships.map((membership) => {
               const user = membership.user_id;
               const isLead = selectedProject && user && user._id === selectedProject.project_lead_id;
+              const workload = projectWorkload?.projectId === selectedProjectId ? projectWorkload : null;
+              const assignedCount = workload?.status === "ready" ? workload.counts[user?._id] || 0 : null;
 
               return (
                 <div className="member-item" key={membership._id}>
                   <div>
                     <strong>{formatUser(user)}</strong>
                     <span>{isLead ? "Project Lead" : "Member"}</span>
+                    <span className="member-workload">{assignedCount === null
+                      ? workload?.status === "error" ? "Assigned stories unavailable" : "Loading assigned stories..."
+                      : `${assignedCount} assigned ${assignedCount === 1 ? "story" : "stories"}`}</span>
+                    {!isLead && assignedCount > 0 ? <small className="member-removal-hint">
+                      Reassign, unassign, or delete these stories before removal.
+                    </small> : null}
                   </div>
                   <button
                     className="danger-button"
@@ -803,6 +808,8 @@ function App() {
             })}
           </div>
         </section>
+        <ProjectBacklog key={selectedProjectId || "no-project"} project={selectedProject}
+          membershipRevision={membershipRevision} formatUser={formatUser} onWorkloadChange={setProjectWorkload} />
           </>
         ) : null}
       </div>

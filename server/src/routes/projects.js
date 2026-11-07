@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Project, { PROJECT_STATUSES } from "../models/Project.js";
 import ProjectMembership from "../models/ProjectMembership.js";
 import User from "../models/User.js";
+import UserStory from "../models/UserStory.js";
 
 const router = Router();
 
@@ -300,6 +301,17 @@ router.delete("/projects/:projectId/memberships/:userId", async (request, respon
     if (idsMatch(getLeadId(project), user._id)) {
       return response.status(400).json({
         message: "The lead has to stay on the project."
+      });
+    }
+
+    const assignedStory = await UserStory.exists({
+      project_id: project._id,
+      assigned_user_id: user._id
+    });
+
+    if (assignedStory) {
+      return response.status(409).json({
+        message: "Reassign, unassign, or delete this member's stories before removing them from the project. Done stories count too."
       });
     }
 
