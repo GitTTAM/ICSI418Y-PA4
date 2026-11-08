@@ -102,10 +102,11 @@ test("backlogs contain only their project's stories and include Done stories", a
   assert.equal(stories[0].status, "Done");
 });
 
-test("rejects invalid required text, priorities, body shapes, and assignee identifiers", async () => {
+test("rejects invalid required text, priorities, statuses, body shapes, and assignee identifiers", async () => {
   for (const fields of [
     { title: "   " }, { description: "\t" }, { title: 42 }, { description: {} },
-    { priority: "Urgent" }, { priority: null }, { assigned_user_id: "" },
+    { priority: "Urgent" }, { priority: null }, { status: "Active" }, { status: null },
+    { status: 42 }, { status: "" }, { assigned_user_id: "" },
     { assigned_user_id: "null" }, { assigned_user_id: 123 }, { assigned_user_id: {} }
   ]) await api("POST", backlogPath(), { ...storyFields, ...fields }, 400);
   await api("POST", backlogPath(), [], 400);
@@ -253,6 +254,13 @@ test("demo data supplies 18 character users, two ranch projects, and five storie
   await api("POST", "/login", { username: "pa4_foghorn_leghorn", password: DEMO_PASSWORD });
   assert.equal(demo.projects.length, 2);
   assert.equal(stories.length, 5);
+  for (const project of demo.projects) {
+    assert(stories.some((story) => String(story.project_id) === String(project._id)));
+  }
+  const bugs = demo.users[1];
+  assert.notEqual(String(bugs._id), String(demo.projects[0].project_lead_id));
+  assert(await ProjectMembership.exists({ project_id: demo.projects[0]._id, user_id: bugs._id }));
+  assert.equal(await ProjectMembership.exists({ project_id: demo.projects[1]._id, user_id: bugs._id }), null);
   assert(stories.some((story) => story.title === "Find 18 cowboys for the showers"));
   assert(stories.some((story) => story.title === "Recruit a shower cleanup crew"));
   assert.equal(new Set(stories.map((story) => story.priority)).size, 3);

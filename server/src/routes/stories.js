@@ -39,7 +39,7 @@ function validateFields(body, editing) {
   if (!STORY_PRIORITIES.includes(body.priority)) {
     return "Pick a priority: High, Medium, or Low.";
   }
-  if (editing && !STORY_STATUSES.includes(body.status)) {
+  if ((editing || body.status !== undefined) && !STORY_STATUSES.includes(body.status)) {
     return "Pick a status: To Do, In Progress, or Done.";
   }
   if (editing && body.assigned_user_id === undefined) {
